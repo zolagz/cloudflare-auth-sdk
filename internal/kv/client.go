@@ -3,22 +3,24 @@ package kv
 import (
 	"context"
 	"fmt"
+	"io"
 	
-	"github.com/cloudflare/cloudflare-go"
+	cloudflare "github.com/cloudflare/cloudflare-go/v6"
+	"github.com/cloudflare/cloudflare-go/v6/kv"
 	apperrors "github.com/zolagz/cloudflare-auth-sdk/internal/errors"
 )
 
 // Client wraps Cloudflare API client for KV operations
 type Client struct {
-	api         *cloudflare.API
+	client      *cloudflare.Client
 	accountID   string
 	namespaceID string
 }
 
 // NewClient creates a new KV client
-func NewClient(api *cloudflare.API, accountID, namespaceID string) *Client {
+func NewClient(client *cloudflare.Client, accountID, namespaceID string) *Client {
 	return &Client{
-		api:         api,
+		client:      client,
 		accountID:   accountID,
 		namespaceID: namespaceID,
 	}
@@ -34,14 +36,20 @@ type WriteOptions struct {
 func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 	const op = "kv.Get"
 	
-	value, err := c.api.GetWorkersKV(ctx, cloudflare.AccountIdentifier(c.accountID), 
-		cloudflare.GetWorkersKVParams{
-			NamespaceID: c.namespaceID,
-			Key:         key,
+	resp, err := c.client.KV.Namespaces.Values.Get(ctx, c.namespaceID, key, 
+		kv.NamespaceValueGetParams{
+			AccountID: cloudflare.F(c.accountID),
 		})
 	if err != nil {
 		return nil, apperrors.NewAppError(op, err, 
 			fmt.Sprintf("failed to get key: %s", key), 500)
+	}
+	defer resp.Body.Close()
+	
+	value, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, apperrors.NewAppError(op, err, 
+			fmt.Sprintf("failed to read response for key: %s", key), 500)
 	}
 	
 	return value, nil
@@ -51,22 +59,21 @@ func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 func (c *Client) Set(ctx context.Context, key string, value []byte, opts *WriteOptions) error {
 	const op = "kv.Set"
 	
-	params := cloudflare.SetWorkersKVParams{
-		NamespaceID: c.namespaceID,
-		Key:         key,
-		Value:       value,
+	params := kv.NamespaceValueUpdateParams{
+		AccountID: cloudflare.F(c.accountID),
+		Value:     cloudflare.F(string(value)),
 	}
 	
 	if opts != nil {
 		if opts.ExpirationTTL > 0 {
-			params.ExpirationTTL = opts.ExpirationTTL
+			params.ExpirationTTL = cloudflare.F(float64(opts.ExpirationTTL))
 		}
 		if opts.Metadata != "" {
-			params.Metadata = opts.Metadata
+			params.Metadata = cloudflare.F[any](opts.Metadata)
 		}
 	}
 	
-	_, err := c.api.SetWorkersKV(ctx, cloudflare.AccountIdentifier(c.accountID), params)
+	_, err := c.client.KV.Namespaces.Values.Update(ctx, c.namespaceID, key, params)
 	if err != nil {
 		return apperrors.NewAppError(op, err, 
 			fmt.Sprintf("failed to set key: %s", key), 500)
@@ -79,10 +86,9 @@ func (c *Client) Set(ctx context.Context, key string, value []byte, opts *WriteO
 func (c *Client) Delete(ctx context.Context, key string) error {
 	const op = "kv.Delete"
 	
-	_, err := c.api.DeleteWorkersKV(ctx, cloudflare.AccountIdentifier(c.accountID),
-		cloudflare.DeleteWorkersKVParams{
-			NamespaceID: c.namespaceID,
-			Key:         key,
+	_, err := c.client.KV.Namespaces.Values.Delete(ctx, c.namespaceID, key,
+		kv.NamespaceValueDeleteParams{
+			AccountID: cloudflare.F(c.accountID),
 		})
 	if err != nil {
 		return apperrors.NewAppError(op, err, 
@@ -92,25 +98,43 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
+// Key represents a KV key with metadata
+type Key struct {
+	Name       string      `json:"name"`
+	Expiration float64     `json:"expiration,omitempty"`
+	Metadata   interface{} `json:"metadata,omitempty"`
+}
+
 // List lists keys in the KV namespace
-func (c *Client) List(ctx context.Context, prefix string, limit int) ([]cloudflare.StorageKey, error) {
+func (c *Client) List(ctx context.Context, prefix string, limit int) ([]Key, error) {
 	const op = "kv.List"
 	
-	params := cloudflare.ListWorkersKVsOptions{
-		Limit: limit,
+	params := kv.NamespaceKeyListParams{
+		AccountID: cloudflare.F(c.accountID),
 	}
 	
 	if prefix != "" {
-		params.Prefix = prefix
+		params.Prefix = cloudflare.F(prefix)
 	}
 	
-	keys, _, err := c.api.ListWorkersKVs(ctx, cloudflare.AccountIdentifier(c.accountID),
-		cloudflare.ListWorkersKVsParams{
-			NamespaceID: c.namespaceID,
-		})
+	if limit > 0 {
+		params.Limit = cloudflare.F(float64(limit))
+	}
+	
+	resp, err := c.client.KV.Namespaces.Keys.List(ctx, c.namespaceID, params)
 	if err != nil {
 		return nil, apperrors.NewAppError(op, err, 
 			"failed to list keys", 500)
+	}
+	
+	// Convert response to our Key type
+	var keys []Key
+	for _, item := range resp.Result {
+		keys = append(keys, Key{
+			Name:       item.Name,
+			Expiration: item.Expiration,
+			Metadata:   item.Metadata,
+		})
 	}
 	
 	return keys, nil
@@ -120,10 +144,10 @@ func (c *Client) List(ctx context.Context, prefix string, limit int) ([]cloudfla
 func (c *Client) DeleteBulk(ctx context.Context, keys []string) error {
 	const op = "kv.DeleteBulk"
 	
-	_, err := c.api.DeleteWorkersKVBulk(ctx, cloudflare.AccountIdentifier(c.accountID),
-		cloudflare.DeleteWorkersKVBulkParams{
-			NamespaceID: c.namespaceID,
-			Keys:        keys,
+	_, err := c.client.KV.Namespaces.Keys.BulkDelete(ctx, c.namespaceID,
+		kv.NamespaceKeyBulkDeleteParams{
+			AccountID: cloudflare.F(c.accountID),
+			Body:      keys,
 		})
 	if err != nil {
 		return apperrors.NewAppError(op, err, 

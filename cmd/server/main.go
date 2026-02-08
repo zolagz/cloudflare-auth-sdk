@@ -8,7 +8,8 @@ import (
 	"net/http"
 	"strings"
 	
-	"github.com/cloudflare/cloudflare-go"
+	cloudflare "github.com/cloudflare/cloudflare-go/v6"
+	"github.com/cloudflare/cloudflare-go/v6/option"
 	
 	"github.com/zolagz/cloudflare-auth-sdk/internal/auth"
 	"github.com/zolagz/cloudflare-auth-sdk/internal/config"
@@ -29,18 +30,20 @@ func main() {
 	}
 	
 	// Initialize Cloudflare API client
-	var api *cloudflare.API
+	var client *cloudflare.Client
 	if cfg.CloudflareAPIToken != "" {
-		api, err = cloudflare.NewWithAPIToken(cfg.CloudflareAPIToken)
+		client = cloudflare.NewClient(
+			option.WithAPIToken(cfg.CloudflareAPIToken),
+		)
 	} else {
-		api, err = cloudflare.New(cfg.CloudflareAPIKey, cfg.CloudflareEmail)
-	}
-	if err != nil {
-		log.Fatalf("Failed to create Cloudflare API client: %v", err)
+		client = cloudflare.NewClient(
+			option.WithAPIKey(cfg.CloudflareAPIKey),
+			option.WithAPIEmail(cfg.CloudflareEmail),
+		)
 	}
 	
 	// Initialize services
-	kvClient := kv.NewClient(api, cfg.AccountID, cfg.NamespaceID)
+	kvClient := kv.NewClient(client, cfg.AccountID, cfg.NamespaceID)
 	authService := auth.NewService(kvClient, cfg.JWTSecret, cfg.JWTExpiration)
 	
 	server := &Server{

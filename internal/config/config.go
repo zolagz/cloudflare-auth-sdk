@@ -2,7 +2,10 @@ package config
 
 import (
 	"errors"
+	"log"
 	"os"
+	
+	"github.com/joho/godotenv"
 )
 
 // Config holds the application configuration
@@ -26,6 +29,11 @@ type Config struct {
 
 // LoadConfig loads configuration from environment variables
 func LoadConfig() (*Config, error) {
+	// 尝试加载 .env 文件（如果存在）
+	if err := godotenv.Load(); err != nil {
+		log.Println("未找到 .env 文件或加载失败，将使用系统环境变量")
+	}
+	
 	cfg := &Config{
 		CloudflareAPIKey:   os.Getenv("CLOUDFLARE_API_KEY"),
 		CloudflareEmail:    os.Getenv("CLOUDFLARE_EMAIL"),

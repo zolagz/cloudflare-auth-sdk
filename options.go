@@ -13,6 +13,9 @@ type ClientOptions struct {
 	AccountID   string // Cloudflare Account ID
 	NamespaceID string // Workers KV Namespace ID
 
+	// Cloudflare D1 Database (optional, required for D1 operations)
+	D1DatabaseID string // D1 Database UUID
+
 	// JWT configuration
 	JWTSecret          string // Secret key for signing JWT tokens
 	JWTExpirationHours int    // Token expiration in hours (default: 24)
@@ -74,5 +77,11 @@ func (o *ClientOptions) WithJWTSecret(secret string) *ClientOptions {
 // WithJWTExpirationHours sets the JWT token expiration in hours.
 func (o *ClientOptions) WithJWTExpirationHours(hours int) *ClientOptions {
 	o.JWTExpirationHours = hours
+	return o
+}
+
+// WithD1DatabaseID sets the Cloudflare D1 database UUID.
+func (o *ClientOptions) WithD1DatabaseID(id string) *ClientOptions {
+	o.D1DatabaseID = id
 	return o
 }

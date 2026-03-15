@@ -26,6 +26,14 @@ var (
 
 	// KV errors
 	ErrKVOperationFailed = errors.New("KV operation failed")
+
+	// D1 errors
+	ErrD1NotConfigured   = errors.New("D1 database ID not configured")
+	ErrD1QueryFailed     = errors.New("D1 query failed")
+
+	// Credits errors
+	ErrInsufficientCredits = errors.New("insufficient credits")
+	ErrCreditsAccountNotFound = errors.New("credits account not found")
 )
 
 // AppError represents an application error with additional context.
@@ -40,7 +48,11 @@ type AppError struct {
 }
 
 // Error implements the error interface.
+// Format: "Op: Message (underlying: Err)" — shows the full detail chain.
 func (e *AppError) Error() string {
+	if e.Op != "" && e.Message != "" {
+		return fmt.Sprintf("%s: %s", e.Op, e.Message)
+	}
 	if e.Op != "" {
 		return fmt.Sprintf("%s: %v", e.Op, e.Err)
 	}

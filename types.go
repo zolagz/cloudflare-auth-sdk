@@ -70,3 +70,50 @@ func (u *User) ToUserInfo() UserInfo {
 		Email: u.Email,
 	}
 }
+
+// ─── D1 通用类型 ───────────────────────────────────────────────────────────────
+
+// D1QueryResult 是执行 D1 SQL 查询后的结果。
+type D1QueryResult struct {
+	// Results 是查询返回的行，每行为 map[string]interface{}。
+	Results []map[string]interface{}
+	// RowsAffected 是被 INSERT/UPDATE/DELETE 影响的行数。
+	RowsAffected int
+	// Success 标识 Cloudflare API 是否认为此查询成功。
+	Success bool
+}
+
+// D1Statement 表示 D1BatchExec 中的单条 SQL 语句及其参数。
+type D1Statement struct {
+	// SQL 是要执行的 SQL 语句，参数用 ? 占位。
+	SQL string
+	// Params 是按位置顺序对应 ? 的参数列表，全部以字符串传入。
+	Params []string
+}
+
+// ─── 积分相关类型 ──────────────────────────────────────────────────────────────
+
+// CreditsAccount 对应 credits_accounts 表的一行。
+type CreditsAccount struct {
+	UserID      string `json:"user_id"`
+	Balance     int64  `json:"balance"`
+	Reserved    int64  `json:"reserved"`
+	TotalEarned int64  `json:"total_earned"`
+	TotalSpent  int64  `json:"total_spent"`
+}
+
+// DeductCreditsParams 是扣减积分所需的参数。
+type DeductCreditsParams struct {
+	// UserID 是要扣减积分的用户 ID。
+	UserID string
+	// Amount 是要扣减的积分数量（正整数）。
+	Amount int64
+	// Service 是发起扣减的服务名称（如 "openai"、"anthropic"）。
+	Service string
+	// Model 是使用的模型名称（可选）。
+	Model string
+	// TaskID 是任务唯一标识，用于幂等性控制（可选）。
+	TaskID string
+	// Description 是本次扣减的说明（可选）。
+	Description string
+}

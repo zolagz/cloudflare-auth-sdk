@@ -31,11 +31,12 @@ import (
 
 // Client is the main SDK client that provides all authentication and KV operations.
 type Client struct {
-	cfClient    *cloudflare.Client
-	accountID   string
-	namespaceID string
-	jwtSecret   []byte
-	jwtExpiry   time.Duration
+	cfClient     *cloudflare.Client
+	accountID    string
+	namespaceID  string
+	d1DatabaseID string
+	jwtSecret    []byte
+	jwtExpiry    time.Duration
 }
 
 // NewClient creates a new SDK client with the provided options.
@@ -78,11 +79,12 @@ func NewClient(opts *ClientOptions) (*Client, error) {
 	}
 
 	return &Client{
-		cfClient:    cfClient,
-		accountID:   opts.AccountID,
-		namespaceID: opts.NamespaceID,
-		jwtSecret:   []byte(opts.JWTSecret),
-		jwtExpiry:   jwtExpiry,
+		cfClient:     cfClient,
+		accountID:    opts.AccountID,
+		namespaceID:  opts.NamespaceID,
+		d1DatabaseID: opts.D1DatabaseID,
+		jwtSecret:    []byte(opts.JWTSecret),
+		jwtExpiry:    jwtExpiry,
 	}, nil
 }
 
